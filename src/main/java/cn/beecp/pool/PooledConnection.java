@@ -49,7 +49,7 @@ final class PooledConnection{
 	
 	//changed indicator
 	private boolean[] changedInds=new boolean[4]; //0:autoCommit,1:transactionIsolation,2:readOnly,3:catalog
-	private byte changedBitVal=Byte.parseByte("0000",2); //pos:last ---> head;0:unchanged,1:changed
+	private short changedBitVal=Byte.parseByte("0000",2); //pos:last ---> head;0:unchanged,1:changed
 	static short Pos_AutoCommitInd=0;
 	static short Pos_TransactionIsolationInd=1;
 	static short Pos_ReadOnlyInd=2;
@@ -142,6 +142,7 @@ final class PooledConnection{
 			if (changedInds[0]) {
 				try {
 					rawConn.setAutoCommit(pConfig.isDefaultAutoCommit());
+					curAutoCommit=pConfig.isDefaultAutoCommit();
 					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset autoCommit to:{}",pConfig.isDefaultAutoCommit(),e);
