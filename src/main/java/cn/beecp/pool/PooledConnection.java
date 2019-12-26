@@ -15,18 +15,18 @@
  */
 package cn.beecp.pool;
 
-import static cn.beecp.pool.PoolObjectsState.CONNECTION_IDLE;
-import static cn.beecp.util.BeecpUtil.oclose;
-import static cn.beecp.util.BeecpUtil.isNullText;
-import static java.lang.System.currentTimeMillis;
-
-import java.sql.Connection;
-import java.sql.SQLException;
-
+import cn.beecp.BeeDataSourceConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import cn.beecp.BeeDataSourceConfig;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+
+import static cn.beecp.pool.PoolObjectsState.CONNECTION_IDLE;
+import static cn.beecp.util.BeecpUtil.isNullText;
+import static cn.beecp.util.BeecpUtil.oclose;
+import static java.lang.System.currentTimeMillis;
 
 /**
  * Pooled Connection
@@ -41,24 +41,26 @@ final class PooledConnection{
 	BeeDataSourceConfig pConfig;
 	Connection rawConn;
 	ProxyConnectionBase proxyConn;
-	long lastAccessTime;
+	volatile long lastAccessTime;
 	boolean commitDirtyInd;
 	boolean curAutoCommit;
-	private ConnectionPool pool;
+	private FastConnectionPool pool;
 	private Logger log = LoggerFactory.getLogger(this.getClass());
 	
 	//changed indicator
-	private boolean[] changedInds=new boolean[4]; //0:autoCommit,1:transactionIsolation,2:readOnly,3:catalog
-	private short changedBitVal=Byte.parseByte("0000",2); //pos:last ---> head;0:unchanged,1:changed
+	private boolean[] changedInds=new boolean[6]; //0:autoCommit,1:transactionIsolation,2:readOnly,3:catalog,4:schema,5:networkTimeout
+	private short changedBitVal=Byte.parseByte("000000",2); //pos:last ---> head;0:unchanged,1:changed
 	static short Pos_AutoCommitInd=0;
 	static short Pos_TransactionIsolationInd=1;
 	static short Pos_ReadOnlyInd=2;
 	static short Pos_CatalogInd=3;
+	static short Pos_SchemaInd=4;
+	static short Pos_NetworkTimeoutInd=5;
 	
-	public PooledConnection(Connection rawConn,ConnectionPool connPool,BeeDataSourceConfig config)throws SQLException{
+	public PooledConnection(Connection rawConn,FastConnectionPool connPool,BeeDataSourceConfig config)throws SQLException{
 		 this(rawConn,connPool,config,CONNECTION_IDLE);
 	}
-	public PooledConnection(Connection rawConn,ConnectionPool connPool,BeeDataSourceConfig config,int connState)throws SQLException{
+	public PooledConnection(Connection rawConn,FastConnectionPool connPool,BeeDataSourceConfig config,int connState)throws SQLException{
 		pool=connPool;
 		this.rawConn=rawConn;
 
@@ -72,7 +74,7 @@ final class PooledConnection{
 	}
 	private void setDefaultOnRawConn()throws SQLException{
 		rawConn.setAutoCommit(pConfig.isDefaultAutoCommit());
-		rawConn.setTransactionIsolation(pConfig.getDefaultTransactionIsolation());
+		rawConn.setTransactionIsolation(pConfig.getDefaultTransactionIsolationCode());
 		rawConn.setReadOnly(pConfig.isDefaultReadOnly());
 		if(!isNullText(pConfig.getDefaultCatalog()))
 			rawConn.setCatalog(pConfig.getDefaultCatalog());
@@ -83,38 +85,32 @@ final class PooledConnection{
 	}
 	//called for pool
 	void closeRawConn() {
-		try{
-			resetRawConnOnReturn();
-			if(stmCacheIsValid)
-				stmCache.clear();
-
-			pConfig=null;
-			oclose(rawConn);
-		}finally{
-			if(proxyConn!=null){
-				proxyConn.setConnectionDataToNull();
-				proxyConn=null;
-			}
+		if(proxyConn!=null){
+			proxyConn.setAsClosed();
+			proxyConn=null;
 		}
+
+		resetRawConnOnReturn();
+		if(stmCacheIsValid)
+			stmCache.clear();
+		oclose(rawConn);
 	}
 
 
 	//***************called fow raw conn proxy ********//
 	final void returnToPoolBySelf(){
-		try{
-			resetRawConnOnReturn();
-			pool.release(this,true);
-		}finally{
-			proxyConn = null;
-		}
+		proxyConn.setAsClosed();
+		proxyConn=null;
+		resetRawConnOnReturn();
+		pool.release(this,true);
 	}
 	void setCurAutoCommit(boolean curAutoCommit) {
 		this.curAutoCommit = curAutoCommit;
 	}
-	void updateAccessTime() {
+	final void updateAccessTime() {
 		lastAccessTime = currentTimeMillis();
 	}
-	void updateAccessTimeWithCommitDirty() {
+	final void updateAccessTimeWithCommitDirty() {
 		lastAccessTime=currentTimeMillis();
 		commitDirtyInd=!curAutoCommit;
 	}
@@ -153,7 +149,7 @@ final class PooledConnection{
 
 			if (changedInds[1]) {
 				try {
-					rawConn.setTransactionIsolation(pConfig.getDefaultTransactionIsolation());
+					rawConn.setTransactionIsolation(pConfig.getDefaultTransactionIsolationCode());
 					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset transactionIsolation to:{}",pConfig.getDefaultTransactionIsolation(),e);

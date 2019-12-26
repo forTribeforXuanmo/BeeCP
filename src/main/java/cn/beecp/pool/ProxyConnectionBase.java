@@ -15,15 +15,16 @@
  */
 package cn.beecp.pool;
 
-import static cn.beecp.pool.PoolExceptionList.ConnectionClosedException;
-import static cn.beecp.pool.PoolExceptionList.AutoCommitChangeForbiddennException;
-import static cn.beecp.util.BeecpUtil.equalsText;
+import cn.beecp.BeeDataSourceConfig;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Savepoint;
+import java.util.concurrent.Executor;
 
-import cn.beecp.BeeDataSourceConfig;
+import static cn.beecp.pool.PoolExceptionList.AutoCommitChangeForbiddennException;
+import static cn.beecp.pool.PoolExceptionList.ConnectionClosedException;
+import static cn.beecp.util.BeecpUtil.equalsText;
 /**
  * raw connection wrapper
  * 
@@ -41,7 +42,10 @@ abstract class ProxyConnectionBase implements Connection{
 		delegate=pConn.rawConn;
 		pConfig=pConn.pConfig;
 	}
-	protected void checkClose() throws SQLException {
+	void setAsClosed(){
+		isClosed=true;
+	}
+	protected final void checkClose() throws SQLException {
 		if(isClosed)throw ConnectionClosedException;
 	}
 	public void setAutoCommit(boolean autoCommit) throws SQLException {
@@ -59,7 +63,7 @@ abstract class ProxyConnectionBase implements Connection{
 		checkClose();
 		delegate.setTransactionIsolation(level);
 		pConn.updateAccessTime();
-		pConn.setChangedInd(PooledConnection.Pos_TransactionIsolationInd,level!=pConfig.getDefaultTransactionIsolation());
+		pConn.setChangedInd(PooledConnection.Pos_TransactionIsolationInd,level!=pConfig.getDefaultTransactionIsolationCode());
 	}
 	public void setReadOnly(boolean readOnly) throws SQLException {
 		checkClose();
@@ -101,19 +105,9 @@ abstract class ProxyConnectionBase implements Connection{
     	  throw new SQLException("Wrapped object is not an instance of " + iface);
       } 
 	}
-	void setConnectionDataToNull() {
-		isClosed=true;
-		delegate=null;
-		pConn=null;
-		pConfig=null;
-	}
-	public void close() throws SQLException {
-		try{
-			this.checkClose();
-			isClosed = true;
-			pConn.returnToPoolBySelf();
-		}finally{
-			setConnectionDataToNull();
-		}
+	public final void close() throws SQLException {
+		this.checkClose();
+		isClosed = true;
+		pConn.returnToPoolBySelf();
 	}
 }
