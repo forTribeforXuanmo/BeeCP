@@ -160,16 +160,7 @@ public final class FastConnectionPool extends Thread implements ConnectionPool, 
 			this.start();
 
 			poolSemaphore = new Semaphore(poolConfig.getConcurrentSize(), poolConfig.isFairMode());
-			log.info("BeeCP({})has been startup{init size:{},max size:{},concurrent size:{},mode:{},max wait:{}ms}",
-					poolName,
-					connArray.length,
-					config.getMaxActive(), 
-					poolConfig.getConcurrentSize(), 
-					mode,
-					poolConfig.getMaxWait());
-			
 			poolState.set(POOL_NORMAL);
-
 			networkTimeoutExecutor.setMaximumPoolSize(config.getMaxActive());
 			idleCheckSchFuture = idleSchExecutor.scheduleAtFixedRate(new Runnable() {
 				public void run() {// check idle connection
@@ -179,6 +170,13 @@ public final class FastConnectionPool extends Thread implements ConnectionPool, 
 
 			registerJMX();
 			createInitConns();
+			log.info("BeeCP({})has been startup{init size:{},max size:{},concurrent size:{},mode:{},max wait:{}ms}",
+					poolName,
+					connArray.length,
+					config.getMaxActive(),
+					poolConfig.getConcurrentSize(),
+					mode,
+					poolConfig.getMaxWait());
 		} else {
 			throw new SQLException("Pool has been initialized");
 		}
