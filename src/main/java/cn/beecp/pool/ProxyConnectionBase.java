@@ -20,7 +20,6 @@ import cn.beecp.BeeDataSourceConfig;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Savepoint;
-import java.util.concurrent.Executor;
 
 import static cn.beecp.pool.PoolExceptionList.AutoCommitChangeForbiddennException;
 import static cn.beecp.pool.PoolExceptionList.ConnectionClosedException;
@@ -54,7 +53,6 @@ abstract class ProxyConnectionBase implements Connection{
 		  throw AutoCommitChangeForbiddennException;
 		
 		delegate.setAutoCommit(autoCommit);
-		pConn.updateAccessTime();
 		pConn.setCurAutoCommit(autoCommit);
 		pConn.setChangedInd(PooledConnection.Pos_AutoCommitInd,autoCommit!=pConfig.isDefaultAutoCommit());
 		if(autoCommit)pConn.commitDirtyInd=false;
@@ -62,34 +60,34 @@ abstract class ProxyConnectionBase implements Connection{
 	public void setTransactionIsolation(int level) throws SQLException {
 		checkClose();
 		delegate.setTransactionIsolation(level);
-		pConn.updateAccessTime();
 		pConn.setChangedInd(PooledConnection.Pos_TransactionIsolationInd,level!=pConfig.getDefaultTransactionIsolationCode());
 	}
 	public void setReadOnly(boolean readOnly) throws SQLException {
 		checkClose();
 		delegate.setReadOnly(readOnly);
-		pConn.updateAccessTime();
 		pConn.setChangedInd(PooledConnection.Pos_ReadOnlyInd,readOnly!=pConfig.isDefaultReadOnly());
 	}
 	public void setCatalog(String catalog) throws SQLException {
 		checkClose();
 		delegate.setCatalog(catalog);
-		pConn.updateAccessTime();
 		pConn.setChangedInd(PooledConnection.Pos_CatalogInd,!equalsText(catalog, pConfig.getDefaultCatalog()));
 	}
 	public void commit() throws SQLException{
 		checkClose();
 		delegate.commit();
+		pConn.updateAccessTime();
 		pConn.commitDirtyInd=false;
 	}
 	public void rollback() throws SQLException{
 		checkClose();
 		delegate.rollback();
+		pConn.updateAccessTime();
 		pConn.commitDirtyInd=false;
 	}
 	public void rollback(Savepoint savepoint) throws SQLException{
 		checkClose();
 		delegate.rollback(savepoint);
+		pConn.updateAccessTime();
 		pConn.commitDirtyInd=false;
 	}
 	public final boolean isWrapperFor(Class<?> iface) throws SQLException {

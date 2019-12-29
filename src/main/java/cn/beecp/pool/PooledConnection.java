@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
 
 import static cn.beecp.pool.PoolObjectsState.CONNECTION_IDLE;
 import static cn.beecp.util.BeecpUtil.isNullText;
@@ -120,6 +119,7 @@ final class PooledConnection{
     void setChangedInd(int pos,boolean changed){
 		changedInds[pos]=changed;
     	changedBitVal^=(changedBitVal&(1<<pos))^((changed?1:0)<<pos);
+		updateAccessTime();
     }
 	//reset connection on return to pool
 	private void resetRawConnOnReturn() {
@@ -139,7 +139,6 @@ final class PooledConnection{
 				try {
 					rawConn.setAutoCommit(pConfig.isDefaultAutoCommit());
 					curAutoCommit=pConfig.isDefaultAutoCommit();
-					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset autoCommit to:{}",pConfig.isDefaultAutoCommit(),e);
 				}finally{
@@ -150,7 +149,6 @@ final class PooledConnection{
 			if (changedInds[1]) {
 				try {
 					rawConn.setTransactionIsolation(pConfig.getDefaultTransactionIsolationCode());
-					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset transactionIsolation to:{}",pConfig.getDefaultTransactionIsolation(),e);
 				}finally {
@@ -161,7 +159,6 @@ final class PooledConnection{
 			if (changedInds[2]) {//reset readonly
 				try {
 					rawConn.setReadOnly(pConfig.isDefaultReadOnly());
-					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset readOnly to:{}",pConfig.isDefaultReadOnly(),e);
 				}finally{
@@ -172,7 +169,6 @@ final class PooledConnection{
 			if (changedInds[3]) {//reset catalog
 				try {
 					rawConn.setCatalog(pConfig.getDefaultCatalog());
-					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset catalog to:{}",pConfig.getDefaultCatalog(),e);
 				}finally{
@@ -186,6 +182,7 @@ final class PooledConnection{
 		
 		try {//clear warnings
 			rawConn.clearWarnings();
+			updateAccessTime();
 		} catch (SQLException e) {
 			log.error("Failed to clear warnings",e);
 		}
