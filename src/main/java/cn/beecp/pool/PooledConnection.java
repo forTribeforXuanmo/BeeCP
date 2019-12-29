@@ -186,7 +186,6 @@ final class PooledConnection{
 
 		try {//clear warnings
 			rawConn.clearWarnings();
-			updateAccessTime();
 		} catch (SQLException e) {
 			log.error("Failed to clear warnings",e);
 		}
