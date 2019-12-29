@@ -123,11 +123,10 @@ final class PooledConnection{
     }
 	//reset connection on return to pool
 	private void resetRawConnOnReturn() {
-		boolean updateTimeInd=false;
 		if (!curAutoCommit&&commitDirtyInd){//Roll back when commit dirty
 			try {
 				rawConn.rollback();
-				updateTimeInd=true;
+				updateAccessTime();
 			} catch (SQLException e) {
 				log.error("Failed to rollback on return to pool", e);
 			}finally{
@@ -141,7 +140,7 @@ final class PooledConnection{
 				try {
 					rawConn.setAutoCommit(pConfig.isDefaultAutoCommit());
 					curAutoCommit=pConfig.isDefaultAutoCommit();
-					updateTimeInd=true;
+					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset autoCommit to:{}",pConfig.isDefaultAutoCommit(),e);
 				}finally{
@@ -152,7 +151,7 @@ final class PooledConnection{
 			if (changedInds[1]) {
 				try {
 					rawConn.setTransactionIsolation(pConfig.getDefaultTransactionIsolationCode());
-					updateTimeInd=true;
+					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset transactionIsolation to:{}",pConfig.getDefaultTransactionIsolation(),e);
 				}finally {
@@ -163,7 +162,7 @@ final class PooledConnection{
 			if (changedInds[2]) {//reset readonly
 				try {
 					rawConn.setReadOnly(pConfig.isDefaultReadOnly());
-					updateTimeInd=true;
+					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset readOnly to:{}",pConfig.isDefaultReadOnly(),e);
 				}finally{
@@ -174,7 +173,7 @@ final class PooledConnection{
 			if (changedInds[3]) {//reset catalog
 				try {
 					rawConn.setCatalog(pConfig.getDefaultCatalog());
-					updateTimeInd=true;
+					updateAccessTime();
 				} catch (SQLException e) {
 					log.error("Failed to reset catalog to:{}",pConfig.getDefaultCatalog(),e);
 				}finally{
@@ -185,7 +184,6 @@ final class PooledConnection{
 			changedBitVal=0;
 		}//reset end
 
-		if(updateTimeInd)updateAccessTime();
 		try {//clear warnings
 			rawConn.clearWarnings();
 			updateAccessTime();
