@@ -345,7 +345,7 @@ public final class FastConnectionPool extends Thread implements ConnectionPool, 
 				threadLocal.set(new WeakReference<Borrower>(borrower));
 			} else {
 				borrower.hasHoldNewOne = false;
-				if(poolSemaphore.availablePermits()>0) {
+				if(tansferPolicy.allowBeforeSemaphore()){
 					PooledConnection pConn = borrower.lastUsedConn;
 					if (pConn != null && ConnStateUpdater.compareAndSet(pConn, CONNECTION_IDLE, CONNECTION_USING)) {
 						if (testOnBorrow(pConn))
@@ -783,30 +783,33 @@ public final class FastConnectionPool extends Thread implements ConnectionPool, 
 	// Transfer Policy
 	interface TransferPolicy {
 		int getCheckStateCode();
+		boolean allowBeforeSemaphore();
 		boolean tryCatch(PooledConnection pConn);
 		void onFailTransfer(PooledConnection pConn);
 		void beforeTransfer(PooledConnection pConn);
 	}
-	class CompeteTransferPolicy implements TransferPolicy {
-		public int getCheckStateCode() {
+	final class CompeteTransferPolicy implements TransferPolicy {
+		public final int getCheckStateCode() {
 			return CONNECTION_IDLE;
 		}
-		public boolean tryCatch(PooledConnection pConn) {
+		public final boolean allowBeforeSemaphore(){return true; }
+		public final boolean tryCatch(PooledConnection pConn) {
 			return ConnStateUpdater.compareAndSet(pConn, CONNECTION_IDLE, CONNECTION_USING);
 		}
-		public void onFailTransfer(PooledConnection pConn) { }
-		public void beforeTransfer(PooledConnection pConn) {
+		public final void onFailTransfer(PooledConnection pConn) { }
+		public final void beforeTransfer(PooledConnection pConn) {
 			ConnStateUpdater.set(pConn, CONNECTION_IDLE);
 		}
 	}
-	class FairTransferPolicy implements TransferPolicy {
-		public int getCheckStateCode() {return CONNECTION_USING; }
-		public boolean tryCatch(PooledConnection pConn) {
+	final class FairTransferPolicy implements TransferPolicy {
+		public final int getCheckStateCode() {return CONNECTION_USING; }
+		public final boolean allowBeforeSemaphore(){ return poolSemaphore.availablePermits()>0;}
+		public final boolean tryCatch(PooledConnection pConn) {
 			return ConnStateUpdater.get(pConn) == CONNECTION_USING;
 		}
-		public void onFailTransfer(PooledConnection pConn) {
+		public final void onFailTransfer(PooledConnection pConn) {
 			ConnStateUpdater.set(pConn, CONNECTION_IDLE);
 		}
-		public void beforeTransfer(PooledConnection pConn) { }
+		public final void beforeTransfer(PooledConnection pConn) { }
 	}
 }
