@@ -345,12 +345,14 @@ public final class FastConnectionPool extends Thread implements ConnectionPool, 
 				threadLocal.set(new WeakReference<Borrower>(borrower));
 			} else {
 				borrower.hasHoldNewOne = false;
-				PooledConnection pConn = borrower.lastUsedConn;
-				if (pConn != null && ConnStateUpdater.compareAndSet(pConn, CONNECTION_IDLE, CONNECTION_USING)) {
-					if (testOnBorrow(pConn))
-						return createProxyConnection(pConn, borrower);
-					else
-						borrower.lastUsedConn = null;
+				if(poolSemaphore.availablePermits()>0) {
+					PooledConnection pConn = borrower.lastUsedConn;
+					if (pConn != null && ConnStateUpdater.compareAndSet(pConn, CONNECTION_IDLE, CONNECTION_USING)) {
+						if (testOnBorrow(pConn))
+							return createProxyConnection(pConn, borrower);
+						else
+							borrower.lastUsedConn = null;
+					}
 				}
 			}
 
