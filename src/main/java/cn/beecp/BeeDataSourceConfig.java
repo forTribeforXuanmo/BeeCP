@@ -15,11 +15,24 @@
  */
 package cn.beecp;
 
-import cn.beecp.pool.JdbcConnectionFactory;
+import cn.beecp.pool.DataSourceConnectionFactory;
+import cn.beecp.pool.DriverConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.sql.DataSource;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Properties;
 
 import static cn.beecp.util.BeecpUtil.isNullText;
@@ -210,6 +223,8 @@ public class BeeDataSourceConfig implements BeeDataSourceConfigJMXBean{
 	 * Default implementation class name
 	 */
 	static final String DefaultImplementClassName = "cn.beecp.pool.FastConnectionPool";
+
+	private Logger log = LoggerFactory.getLogger(BeeDataSourceConfig.class);
 	
 	public BeeDataSourceConfig() {
       this(null,null,null,null);
@@ -464,38 +479,23 @@ public class BeeDataSourceConfig implements BeeDataSourceConfigJMXBean{
 	}
 	void copyTo(BeeDataSourceConfig config){
 		if(!config.checked){
-			config.username=this.username;
-			config.password=this.password;
-			config.jdbcUrl=this.jdbcUrl;
-			config.driverClassName=this.driverClassName; 
-			config.connectionFactoryClassName=this.connectionFactoryClassName;
-			config.connectionFactory=this.connectionFactory;
-			config.connectProperties=new Properties(this.connectProperties);
-			config.poolName=this.poolName;
-			config.fairMode=this.fairMode;
-			config.initialSize=this.initialSize;
-			config.maxActive=this.maxActive;
-			config.concurrentSize=this.concurrentSize;
-			config.preparedStatementCacheSize=this.preparedStatementCacheSize;
-			config.testOnBorrow=this.testOnBorrow;
-			config.testOnReturn=this.testOnReturn;
-			config.defaultAutoCommit=this.defaultAutoCommit;
-			config.defaultTransactionIsolation=this.defaultTransactionIsolation;
-			config.defaultTransactionIsolationCode=this.defaultTransactionIsolationCode;
-			config.defaultCatalog=this.defaultCatalog;
-			config.defaultSchema=this.defaultSchema;
-			config.defaultReadOnly=this.defaultReadOnly;
-			config.maxWait=this.maxWait;
-			config.idleTimeout=this.idleTimeout;
-			config.holdIdleTimeout=this.holdIdleTimeout;
-			config.connectionTestSQL=this.connectionTestSQL;
-			config.connectionTestTimeout=this.connectionTestTimeout;
-			config.connectionTestInterval=this.connectionTestInterval;
-			config.forceCloseConnection=this.forceCloseConnection;
-			config.waitTimeToClearPool=this.waitTimeToClearPool;
-			config.idleCheckTimeInitDelay=this.idleCheckTimeInitDelay;
-			config.idleCheckTimeInterval=this.idleCheckTimeInterval;
-			config.poolImplementClassName=this.poolImplementClassName;
+			int modifiers;
+			Field[] fields=this.getClass().getDeclaredFields();
+			for(Field field:fields){
+				modifiers=field.getModifiers();
+				if(Modifier.isStatic(modifiers)||Modifier.isFinal(modifiers))
+					continue;
+
+				boolean accessible=field.isAccessible();
+				try {
+					if(!accessible)field.setAccessible(true);
+					field.set(config, field.get(this));
+				}catch(Exception e){
+					log.warn("Failed to copy field["+field.getName()+"]",e);
+				}finally{
+					if(!accessible)field.setAccessible(accessible);
+				}
+			}
 		}
 	}
 	
@@ -528,21 +528,36 @@ public class BeeDataSourceConfig implements BeeDataSourceConfigJMXBean{
 			if (isNullText(jdbcUrl))
 				throw new IllegalArgumentException("Connect url can't be null");
 			if (connectDriver==null)
-				throw new IllegalArgumentException("Failed to find mathed jdbc Driver");
+				throw new IllegalArgumentException("Failed to load jdbc Driver");
 			
 			if (!isNullText(this.username))
 				this.connectProperties.put("user", this.username);
 			if (!isNullText(this.password))
 				this.connectProperties.put("password", this.password);
 			
-			connectionFactory= new JdbcConnectionFactory(jdbcUrl,connectDriver,connectProperties);
+			connectionFactory= new DriverConnectionFactory(jdbcUrl,connectDriver,connectProperties);
 		}else if(connectionFactory==null && !isNullText(this.connectionFactoryClassName)){
 			try {
  				Class<?> conFactClass=Class.forName(connectionFactoryClassName,true,BeeDataSourceConfig.class.getClassLoader());
-				if(!ConnectionFactory.class.isAssignableFrom(conFactClass))
+				if(ConnectionFactory.class.isAssignableFrom(conFactClass)){
+					connectionFactory=(ConnectionFactory)conFactClass.newInstance();
+				}else if(DataSource.class.isAssignableFrom(conFactClass)){
+					DataSource driverDataSource=(DataSource)conFactClass.newInstance();
+					Iterator itor=connectProperties.entrySet().iterator();
+					while(itor.hasNext()) {
+						Map.Entry entry = (Map.Entry) itor.next();
+						if (entry.getKey() instanceof String) {
+							try {
+								setDataSourceProperty((String)entry.getKey(),entry.getValue(),driverDataSource);
+							}catch(Exception e){
+								throw new IllegalArgumentException("Failed to set datasource property["+entry.getKey()+"]",e);
+							}
+						}
+					}
+					connectionFactory=new DataSourceConnectionFactory(driverDataSource,username,password);
+				}else{
 					throw new IllegalArgumentException("Custom connection factory class must be implemented 'ConnectionFactory' interface");
-				
- 				connectionFactory=(ConnectionFactory)conFactClass.newInstance();
+				}
 			} catch (ClassNotFoundException e) {
 				throw new IllegalArgumentException("Class("+connectionFactoryClassName+")not found ");
 			} catch (InstantiationException e) {
@@ -557,17 +572,17 @@ public class BeeDataSourceConfig implements BeeDataSourceConfigJMXBean{
 		if (this.initialSize < 0)
 			throw new IllegalArgumentException("Pool init size must be greater than zero");
 		if (this.initialSize > maxActive)
-			throw new IllegalArgumentException("Error configeruation,pool initiation size must be less than pool max size");
+			throw new IllegalArgumentException("Pool initiation size must be less than pool max size");
 		if (this.concurrentSize <=0)
-			throw new IllegalArgumentException("Error configeruation,pool concurrent size must be greater than zero");
+			throw new IllegalArgumentException("Pool concurrent size must be greater than zero");
 		if (this.concurrentSize > maxActive)
-			throw new IllegalArgumentException("Error configeruation,pool concurrent size must be less than pool max size");
+			throw new IllegalArgumentException("Pool concurrent size must be less than pool max size");
 		if (this.idleTimeout <= 0)
 			throw new IllegalArgumentException("Connection max idle time must be greater than zero");
 		if (this.maxWait <= 0)
 			throw new IllegalArgumentException("Borrower max wait time must be greater than zero");
 		if (this.preparedStatementCacheSize < 0)
-			throw new IllegalArgumentException("Statement cache size must be greater than zero");
+			throw new IllegalArgumentException("Statement cache size can't be lesser than zero");
 
 		defaultTransactionIsolationCode=TransactionIsolationLevel.nameToCode(defaultTransactionIsolation);
 		if(defaultTransactionIsolationCode==-999){
@@ -581,4 +596,59 @@ public class BeeDataSourceConfig implements BeeDataSourceConfigJMXBean{
 			throw new IllegalArgumentException("Connection validate SQL must start with 'select '");
 		//}
 	}
+	private void setDataSourceProperty(String propName,Object propValue,Object bean)throws Exception{
+		if(propName.endsWith("."))return;
+		int index=propName.lastIndexOf(".");
+		if(index>=0)propName=propName.substring(index+1);
+
+		propName=propName.trim();
+		String methodName="set"+propName.substring(0,1).toUpperCase()+propName.substring(1);
+		Method[] methods =bean.getClass().getMethods();
+		Method targetMethod=null;
+		for(Method method:methods){
+			if(method.getName().equals(methodName) && method.getParameterTypes().length==1){
+				targetMethod = method;
+				break;
+			}
+		}
+
+		if(targetMethod!=null){
+			Class paramType=targetMethod.getParameterTypes()[0];
+			if(paramType.isInstance(propValue)){
+				targetMethod.invoke(bean,new Object[]{propValue});
+			}else if(propValue instanceof String){
+				String value=(String)propValue;
+				if(paramType==String.class ){
+					targetMethod.invoke(bean,new Object[]{propValue});
+				}else if(paramType==boolean.class||paramType==Boolean.class){
+					targetMethod.invoke(bean,new Object[]{Boolean.valueOf(value)});
+				}else if(paramType==int.class||paramType==Integer.class){
+					targetMethod.invoke(bean,new Object[]{Integer.valueOf(value)});
+				}else if(paramType==long.class||paramType==Long.class){
+					targetMethod.invoke(bean,new Object[]{Long.valueOf(value)});
+				}
+			}
+		}
+	}
+	public void loadPropertiesFile(String filename)throws IOException{
+		File file = new File(filename);
+		if(!file.exists())throw new FileNotFoundException(filename);
+		loadPropertiesFile(file);
+	}
+	public void loadPropertiesFile(File file)throws IOException{
+		if(!file.isFile())throw new IOException("Invalid properties file");
+		if(!file.getAbsolutePath().toLowerCase().endsWith(".properties"))throw new IOException("Invalid properties file");
+
+		if(!checked){
+			FileInputStream stream=null;
+			try {
+				stream=new FileInputStream(file);
+				connectProperties.clear();
+				connectProperties.load(stream);
+			}finally{
+				if(stream!=null)stream.close();
+			}
+		}
+	}
 }
+
