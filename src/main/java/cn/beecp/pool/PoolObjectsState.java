@@ -22,27 +22,26 @@ package cn.beecp.pool;
  * @version 1.0
  */
 
-final class PoolObjectsState {
+class PoolObjectsState {
 	//POOL STATE
-	static final int POOL_UNINIT         = 1;
-	static final int POOL_NORMAL         = 2;
-	static final int POOL_CLOSED         = 3;
-	static final int POOL_RESTING        = 4;
+	static final int POOL_UNINIT            = 1;
+	static final int POOL_NORMAL            = 2;
+	static final int POOL_CLOSED            = 3;
+	static final int POOL_RESTING           = 4;
 	
 	//POOLED CONNECTION STATE
-	static final int CONNECTION_IDLE      = 1;
-	static final int CONNECTION_USING     = 2;
-	static final int CONNECTION_CLOSED    = 3;
+	static final int CONNECTION_IDLE        = 1;
+	static final int CONNECTION_USING       = 2;
+	static final int CONNECTION_CLOSED      = 3;
 	
 	//WORK THREAD STATE
-	static final int THREAD_WORKING        = 1;
-	static final int THREAD_WAITING        = 2;
-	static final int THREAD_DEAD           = 3;  
+	static final int THREAD_WORKING         = 1;
+	static final int THREAD_WAITING         = 2;
+	static final int THREAD_DEAD            = 3;
 
 	//BORROWER STATE
-	static private class BorrowerStatus{}
-	static final BorrowerStatus BORROWER_NORMAL      = new BorrowerStatus();
-	static final BorrowerStatus BORROWER_WAITING     = new BorrowerStatus();
-	static final BorrowerStatus BORROWER_TIMEOUT     = new BorrowerStatus();
-	static final BorrowerStatus BORROWER_INTERRUPTED = new BorrowerStatus();
+	static final Object BORROWER_NORMAL      = new Object();
+	static final Object BORROWER_WAITING     = new Object();
+	static final Object BORROWER_TIMEOUT     = new Object();
+	static final Object BORROWER_INTERRUPTED = new Object();
 }

@@ -56,8 +56,8 @@ public final class ProxyClassGenerator {
 	public static void writeProxyFile(String folder) throws Exception {
 		ProxyClassGenerator builder = new ProxyClassGenerator();
 		CtClass[] ctClasses = builder.createJdbcProxyClasses();
-		for (int i = 0; i < ctClasses.length; i++) {
-			ctClasses[i].writeFile(folder);
+		for (CtClass ctClass:ctClasses) {
+			ctClass.writeFile(folder);
 		}
 	}
 
@@ -86,8 +86,7 @@ public final class ProxyClassGenerator {
 			String ctConIntfProxyClassName ="cn.beecp.pool.ProxyConnection";
 			CtClass ctConIntfProxyImplClass = classPool.makeClass(ctConIntfProxyClassName,ctConSuperclass);
 			ctConIntfProxyImplClass.setInterfaces(new CtClass[]{ctConIntf});
-			ctConIntfProxyImplClass.setModifiers(Modifier.FINAL);
-			ctConIntfProxyImplClass.setModifiers(Modifier.PUBLIC);
+			ctConIntfProxyImplClass.setModifiers(Modifier.PUBLIC|Modifier.FINAL);
 
 			CtClass[] conCreateParam = new CtClass[]{
 					classPool.get("cn.beecp.pool.PooledConnection")};
@@ -108,8 +107,7 @@ public final class ProxyClassGenerator {
 			String ctStatementIntfProxyClassName ="cn.beecp.pool.ProxyStatement";
 			CtClass ctStatementProxyImplClass = classPool.makeClass(ctStatementIntfProxyClassName,ctStatementWrapClass);
 			ctStatementProxyImplClass.setInterfaces(new CtClass[]{ctStatementIntf});
-			ctStatementProxyImplClass.setModifiers(Modifier.FINAL);
-			ctStatementProxyImplClass.setModifiers(Modifier.PUBLIC);
+			ctStatementProxyImplClass.setModifiers(Modifier.PUBLIC|Modifier.FINAL);
 			CtClass[] statementCreateParam = new CtClass[] {
 					classPool.get("java.sql.Statement"),
 					classPool.get("cn.beecp.pool.ProxyConnection"),
@@ -130,14 +128,13 @@ public final class ProxyClassGenerator {
 			String ctPsStatementIntfProxyClassName ="cn.beecp.pool.ProxyPsStatement";
 			CtClass ctPsStatementProxyImplClass = classPool.makeClass(ctPsStatementIntfProxyClassName,ctPStatementWrapClass);
 			ctPsStatementProxyImplClass.setInterfaces(new CtClass[]{ctPsStatementIntf});
-			ctPsStatementProxyImplClass.setModifiers(Modifier.FINAL);
-			ctPsStatementProxyImplClass.setModifiers(Modifier.PUBLIC);
+			ctPsStatementProxyImplClass.setModifiers(Modifier.PUBLIC|Modifier.FINAL);
 
 			CtClass[] statementPsCreateParam = new CtClass[] {
 					classPool.get("java.sql.PreparedStatement"),
-					classPool.get("boolean"),
 					classPool.get("cn.beecp.pool.ProxyConnection"),
-					classPool.get("cn.beecp.pool.PooledConnection")};
+					classPool.get("cn.beecp.pool.PooledConnection"),
+					classPool.get("boolean")};
 			subClassConstructor = new CtConstructor(statementPsCreateParam,ctPsStatementProxyImplClass);
 			subClassConstructor.setModifiers(Modifier.PUBLIC);
 			body.delete(0, body.length());
@@ -154,12 +151,10 @@ public final class ProxyClassGenerator {
 			String ctCsStatementIntfProxyClassName ="cn.beecp.pool.ProxyCsStatement";
 			CtClass ctCsStatementProxyImplClass = classPool.makeClass(ctCsStatementIntfProxyClassName,ctCStatementWrapClass);
 			ctCsStatementProxyImplClass.setInterfaces(new CtClass[]{ctCsStatementIntf});
-			ctCsStatementProxyImplClass.setModifiers(Modifier.FINAL);
-			ctCsStatementProxyImplClass.setModifiers(Modifier.PUBLIC);
+			ctCsStatementProxyImplClass.setModifiers(Modifier.PUBLIC|Modifier.FINAL);
 
 			CtClass[] statementCsCreateParam = new CtClass[] {
 					classPool.get("java.sql.CallableStatement"),
-					classPool.get("boolean"),
 					classPool.get("cn.beecp.pool.ProxyConnection"),
 					classPool.get("cn.beecp.pool.PooledConnection"),
 					classPool.get("boolean")};
@@ -180,8 +175,7 @@ public final class ProxyClassGenerator {
 			String cttDatabaseMetaDataIntfProxyClassName ="cn.beecp.pool.ProxyDatabaseMetaData";
 			CtClass ctDatabaseMetaDataProxyImplClass = classPool.makeClass(cttDatabaseMetaDataIntfProxyClassName,ctDatabaseMetaDataSuperClass);
 			ctDatabaseMetaDataProxyImplClass.setInterfaces(new CtClass[]{ctDatabaseMetaDataIntf});
-			ctDatabaseMetaDataProxyImplClass.setModifiers(Modifier.FINAL);
-			ctDatabaseMetaDataProxyImplClass.setModifiers(Modifier.PUBLIC);
+			ctDatabaseMetaDataProxyImplClass.setModifiers(Modifier.PUBLIC|Modifier.FINAL);
 
 			CtClass[] databaseMetaData = new CtClass[] {
 					classPool.get("java.sql.DatabaseMetaData"),
@@ -203,8 +197,7 @@ public final class ProxyClassGenerator {
 			String ctResultSetIntfProxyClassName ="cn.beecp.pool.ProxyResultSet";
 			CtClass ctResultSetIntfProxyImplClass = classPool.makeClass(ctResultSetIntfProxyClassName,ctResultSetSuperclass);
 			ctResultSetIntfProxyImplClass.setInterfaces(new CtClass[]{ctResultSetIntf});
-			ctResultSetIntfProxyImplClass.setModifiers(Modifier.FINAL);
-			ctResultSetIntfProxyImplClass.setModifiers(Modifier.PUBLIC);
+			ctResultSetIntfProxyImplClass.setModifiers(Modifier.PUBLIC|Modifier.FINAL);
 
 			CtClass[] resultSetCreateParam = new CtClass[]{
 					classPool.get("java.sql.ResultSet"),
@@ -296,32 +289,30 @@ public final class ProxyClassGenerator {
 			methodBuffer.append("{");
 			methodBuffer.append("checkClose();");
 			if (newCtMethodm.getReturnType() == ctStatementIntf) {
-				methodBuffer.append("return new ProxyStatement(delegate.createStatement($$),this,pConn);");
+				methodBuffer.append("return new ProxyStatement(delegate."+methodName+"($$),this,pConn);");
 			}else if(newCtMethodm.getReturnType() == ctPsStatementIntf){
-				methodBuffer.append("if(pConn.stmCacheIsValid){");
-				methodBuffer.append(" Object key=new PsCacheKey($$);");
-				methodBuffer.append(" StatementCache stmCache=pConn.stmCache;");
-				methodBuffer.append(" PreparedStatement stm=stmCache.get(key);");
+				methodBuffer.append("if(pConn.stmCacheValid){");
+				methodBuffer.append(" StatementCachePsKey key=new StatementCachePsKey($$);");
+				methodBuffer.append(" PreparedStatement stm=pConn.getStatement(key);");
 				methodBuffer.append(" if(stm==null){");
-				methodBuffer.append("    stm=delegate.prepareStatement($$);");
-				methodBuffer.append("    stmCache.put(key,stm);");
+				methodBuffer.append("   stm=delegate."+methodName+"($$);");
+				methodBuffer.append("   pConn.putStatement(key,stm);");
 				methodBuffer.append("  }");
-				methodBuffer.append("  return new ProxyPsStatement(stm,true,this,pConn);");
+				methodBuffer.append("  return new ProxyPsStatement(stm,this,pConn,true);");
 				methodBuffer.append("}else{");
-				methodBuffer.append("  return new ProxyPsStatement(delegate.prepareStatement($$),false,this,pConn);");
+				methodBuffer.append("  return new ProxyPsStatement(delegate."+methodName+"($$),this,pConn,false);");
 				methodBuffer.append("}");
 			}else if(newCtMethodm.getReturnType() == ctCsStatementIntf){
-				methodBuffer.append("if(pConn.stmCacheIsValid){");
-				methodBuffer.append(" Object key=new CsCacheKey($$);");
-				methodBuffer.append(" StatementCache stmCache=pConn.stmCache;");
-				methodBuffer.append(" CallableStatement stm=(CallableStatement)stmCache.get(key);");
+				methodBuffer.append("if(pConn.stmCacheValid){");
+				methodBuffer.append(" StatementCacheCsKey key=new StatementCacheCsKey($$);");
+				methodBuffer.append(" CallableStatement stm=(CallableStatement)pConn.getStatement(key);");
 				methodBuffer.append(" if(stm==null){");
-				methodBuffer.append("   stm=delegate.prepareCall($$);");
-				methodBuffer.append("   stmCache.put(key,stm);");
+				methodBuffer.append("   stm=delegate."+methodName+"($$);");
+				methodBuffer.append("   pConn.putStatement(key,stm);");
 				methodBuffer.append(  "}");
-				methodBuffer.append("  return new ProxyCsStatement(stm,true,this,pConn,true);");
+				methodBuffer.append("  return new ProxyCsStatement(stm,this,pConn,true);");
 				methodBuffer.append("}else{");
-				methodBuffer.append(" return new ProxyCsStatement(delegate.prepareCall($$),false,this,pConn,true);");
+				methodBuffer.append(" return new ProxyCsStatement(delegate."+methodName+"($$),this,pConn,false);");
 				methodBuffer.append("}");
 			}else if (newCtMethodm.getReturnType() == ctDatabaseMetaDataIntf) {
 				methodBuffer.append("return new ProxyDatabaseMetaData(delegate."+methodName+"($$),this,pConn);");
