@@ -34,7 +34,7 @@ public final class BeecpUtil {
 		try {
 			resultSet.close();
 		} catch (Throwable e) {
-			log.debug("Error at closing resultSet:", e);
+			log.warn("Error at closing resultSet:", e);
 		}
 	}
 
@@ -42,7 +42,7 @@ public final class BeecpUtil {
 		try {
 			statement.close();
 		} catch (Throwable e) {
-			log.debug("Error at closing statement:", e);
+			log.warn("Error at closing statement:", e);
 		}
 	}
 
@@ -50,7 +50,7 @@ public final class BeecpUtil {
 		try {
 			connection.close();
 		} catch (Throwable e) {
-			log.debug("Error at closing connection:", e);
+			log.warn("Error at closing connection:", e);
 		}
 	}
 
